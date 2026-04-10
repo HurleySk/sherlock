@@ -1,0 +1,22 @@
+{
+  "name": "sherlock",
+  "version": "1.0.0",
+  "description": "Domain analyst skills for Claude Code — ETL/data migration analysis, mapping document generation, data lineage tracing with column-level precision.",
+  "author": {
+    "name": "Samuel Hurley",
+    "url": "https://github.com/HurleySk"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/HurleySk/sherlock",
+  "repository": "https://github.com/HurleySk/sherlock",
+  "keywords": [
+    "data-migration",
+    "etl",
+    "mapping",
+    "lineage",
+    "analyst",
+    "dataverse",
+    "adf",
+    "sql"
+  ]
+}
