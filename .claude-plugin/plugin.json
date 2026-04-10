@@ -1,6 +1,6 @@
 {
   "name": "sherlock",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Domain analyst skills for Claude Code — ETL/data migration analysis, mapping document generation, data lineage tracing with column-level precision.",
   "author": {
     "name": "Samuel Hurley",
