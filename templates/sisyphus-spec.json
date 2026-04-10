@@ -1,0 +1,96 @@
+{
+  "title": "Migration Mapping: {Entity Name}",
+  "description": "Column-level mapping document for {source_table} to {dv_entity} migration",
+  "sections": [
+    {
+      "name": "Entity Summary",
+      "description": "Source table, target entity, pipeline, alternate key, upsert behavior",
+      "criteria": [
+        {
+          "type": "contains-table",
+          "columns": ["Field", "Value"],
+          "description": "Summary table with Source Table, Target DV Entity, Pipeline, Alternate Key, Upsert Behavior"
+        }
+      ]
+    },
+    {
+      "name": "Column Mapping",
+      "description": "Every source column mapped to its target DV attribute with transform details",
+      "criteria": [
+        {
+          "type": "contains-table",
+          "columns": ["Source Table", "Source Column", "Source Type", "DV Entity", "DV Attribute", "DV Type", "Transform"],
+          "description": "Column mapping table with full source-to-sink trace for every column"
+        },
+        {
+          "type": "custom",
+          "description": "Every source column appears in the mapping, either mapped to a DV attribute or listed as unmapped with explanation"
+        },
+        {
+          "type": "custom",
+          "description": "Transform column documents the full lineage — not just 'Direct' but the staging table and any SQL logic involved (JOINs, CASE, string functions, COALESCE)"
+        }
+      ]
+    },
+    {
+      "name": "Transform Details",
+      "description": "Expanded documentation for complex transforms (CTEs, multi-table JOINs, CASE statements, computed columns)",
+      "criteria": [
+        {
+          "type": "custom",
+          "description": "Each complex transform has its own subsection with the full SQL logic explained in plain language"
+        }
+      ]
+    },
+    {
+      "name": "Lookup Dependencies",
+      "description": "Reference data required during transform, with source and join logic",
+      "criteria": [
+        {
+          "type": "contains-table",
+          "columns": ["Lookup Table", "Source", "Used By (Column)", "Join Logic", "Purpose"],
+          "description": "Lookup dependency table showing what reference data is needed and how it is joined"
+        }
+      ]
+    },
+    {
+      "name": "Unmapped Columns",
+      "description": "Source columns not migrated to the target system",
+      "criteria": [
+        {
+          "type": "contains-table",
+          "columns": ["Source Column", "Reason"],
+          "description": "Every unmapped source column listed with a reason for exclusion"
+        }
+      ]
+    },
+    {
+      "name": "Data Quality Notes",
+      "description": "Truncation risks, null handling, enum mappings, encoding cleanup",
+      "criteria": [
+        {
+          "type": "custom",
+          "description": "Documents known data quality issues: truncation, nulls, invalid values, encoding, and how each is handled"
+        }
+      ]
+    }
+  ],
+  "gather": [
+    {
+      "description": "Pipeline JSON — Copy activity source queries, sink config, alternate keys",
+      "path": "work-repo/pipeline/{pipeline_name}.json"
+    },
+    {
+      "description": "Staging table DDL — column names and types in Azure SQL",
+      "path": "work-repo/SQL DB/sql-almstagingdb-dev-usgovva-01/dbo/Tables/{staging_table}.sql"
+    },
+    {
+      "description": "Dataverse entity schema — target attributes, types, relationships",
+      "path": "dataverse-schema/{env}/{entity_logical_name}.json"
+    },
+    {
+      "description": "Stored procedure — transform SQL if SP-based",
+      "path": "work-repo/SQL DB/sql-almstagingdb-dev-usgovva-01/dbo/Stored Procedures/{sp_name}.sql"
+    }
+  ]
+}
