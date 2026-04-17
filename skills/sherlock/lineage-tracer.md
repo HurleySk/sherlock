@@ -5,97 +5,119 @@ description: "How to trace data lineage through ETL pipelines from source to sin
 
 # Lineage Tracer
 
-## The Three Hops
+## The N-Hop Model
 
-Every migrated column makes three hops:
+Every migrated column passes through one or more hops on its way from source to sink:
 
-1. **Source** (legacy SQL table) -- copied via pipeline Copy activity to...
-2. **Staging** (Azure SQL table) -- transformed via embedded SQL query to...
-3. **Sink** (Dataverse entity) -- upserted via pipeline Copy activity
+1. **Source** (origin system table, file, or API) — extracted by a pipeline step or script to...
+2. **Staging** (intermediate table or landing zone) — transformed via SQL, code, or pipeline logic to...
+3. **Sink** (target system table, entity, or collection) — loaded via upsert, merge, append, or replace
 
-The goal of lineage tracing is to follow each column through all three hops and document what happens at each step.
+Most migrations have 2-4 hops. Some skip staging (direct source-to-sink, 2 hops). Others have multiple intermediate layers (raw → staging → curated → target, 4 hops). Identify how many hops exist before tracing.
 
-## How to Trace: ADF Pipeline-Based Migrations
+The goal of lineage tracing is to follow each column through all hops and document what happens at each step.
 
-### Step 1: Find the Pipeline
+## How to Trace: General Framework
 
-Look in `work-repo/pipeline/` for the Load/migration pipeline. Pipeline names typically follow patterns like:
-- `onprem_Nightly{Entity}Load`
-- `PL_{Entity}_Migration`
-- `Load_{Entity}`
+Regardless of ETL tool, the process is the same:
 
-### Step 2: Identify Copy Activities
+### Step 1: Find the Pipeline or Process
 
-Each Copy activity in the pipeline has a `source` and `sink` section in its JSON definition. A typical migration pipeline has two Copy activities:
-- **Copy 1**: Source (on-prem) to Staging (Azure SQL)
-- **Copy 2**: Staging (Azure SQL) to Sink (Dataverse)
+Locate the pipeline definition, job config, or script responsible for the migration. Look in your project's pipeline directory for the entity name.
 
-Some pipelines combine these or add intermediate steps. Read the activity dependencies to understand the execution order.
+### Step 2: Identify Extraction/Load Steps
 
-### Step 3: Trace Hop 1 (Source to Staging)
+Each step in the pipeline has an input (source) and output (sink). A typical migration pipeline has at least two steps:
+- **Step A**: Source system to staging/landing zone
+- **Step B**: Staging/landing zone to target system
 
-In the first Copy activity:
-- **Source dataset** references an on-prem linked service and table name. This is the legacy source.
-- **`sqlReaderQuery`** or table reference tells you which source columns are selected. If there is no query, all columns from the source table are copied.
-- **Sink** points to the staging table in Azure SQL.
-- **`preCopyScript`** typically contains `TRUNCATE TABLE stg_TableName` -- this confirms the staging table name.
+Some pipelines combine these or add intermediate steps. Read the step dependencies to understand execution order.
 
-What to extract:
-- Source table name and columns
-- Staging table name
-- Any column filtering or renaming in this hop (usually minimal -- most transforms happen in Hop 2)
+### Step 3: Trace Each Hop
 
-### Step 4: Trace Hop 2 (Staging to Sink)
+For each hop, extract:
+- **Input**: What table/file/API is read? Which columns?
+- **Transform**: What SQL, code, or mapping logic is applied?
+- **Output**: What table/entity is written? Which columns?
 
-In the second Copy activity:
-- Look for the activity that reads FROM staging and writes TO Dataverse.
-- The **`sqlReaderQuery`** contains the transform SQL. This is where the real work happens.
+### Step 4: Document the Column Journey
 
-Extract from the SQL query:
-- **Column aliases**: `stg.OrgName AS alm_name` maps staging column to output column name
-- **JOINs**: Lookup resolution joins (e.g., `LEFT JOIN stg_Lookup ON stg.FK = stg_Lookup.ID`) resolve legacy FKs to DV GUIDs
-- **CASE statements**: Enum/option set conversion (`CASE TypeCode WHEN 1 THEN 455780000 END`)
-- **String functions**: `LTRIM(RTRIM(Name))`, `SUBSTRING(Code, 1, 10)`, `REPLACE(Phone, '-', '')`
-- **COALESCE**: Fallback chains for nullable fields
-- **Computed columns**: `CONCAT(FirstName, ' ', LastName)`, arithmetic, conditional logic
-- **CTE chains**: Multi-step transforms common in document metadata or hierarchies
-- **WHERE clauses**: Filtering (e.g., `WHERE IsActive = 1`)
+For each column, record:
+- Source table and column name
+- Every transformation applied (JOINs, CASE, string functions, type conversions)
+- Target table and column name
+- Any lookup dependencies (reference tables that must be loaded first)
 
-### Step 5: Trace Hop 3 (Write to Dataverse)
+## Tool-Specific Guidance
 
-In the sink configuration of the second Copy activity:
-- **Entity name**: The Dataverse entity logical name or entity set name
-- **Write behavior**: Upsert or append
-- **Alternate key**: Used for matching existing records (determines create vs update)
-- **Write batch size**: How many records per API call
-- **Bypass plugin execution**: Whether plugins/workflows fire during upsert
+### Azure Data Factory (ADF)
 
-## How to Trace: SP-Based Migrations
+ADF pipelines are JSON definitions with Copy activities, stored procedure activities, and orchestration activities.
 
-For stored procedure-based migrations:
+**Finding the pipeline**: Look in your pipeline directory for JSON files. Pipeline names typically follow patterns like `Nightly{Entity}Load`, `PL_{Entity}_Migration`, or `Load_{Entity}`.
 
-1. **Find the SP** in `work-repo/SQL DB/.../Stored Procedures/` or `db-export/{connection}/procedure/`
+**Tracing Copy activities**: Each Copy activity has a `source` and `sink` section. Key fields:
+- `sqlReaderQuery` or table reference — the source columns being read
+- `preCopyScript` (often `TRUNCATE TABLE stg_*`) — confirms the staging table name
+- Sink configuration — the target entity/table, write behavior (upsert/append), key strategy
+
+**Tracing transforms**: The `sqlReaderQuery` in the second Copy activity typically contains the core transformation SQL — JOINs, CASE statements, string functions, CTEs.
+
+### dbt (Data Build Tool)
+
+dbt models are SQL SELECT statements that define transformations.
+
+**Finding the model**: Look in `models/` for `.sql` files named after the target table.
+
+**Tracing transforms**: The SQL in the model IS the transform. Source references use `{{ source('schema', 'table') }}` or `{{ ref('other_model') }}`. Follow `ref()` calls to trace upstream dependencies.
+
+**Lineage**: dbt generates lineage graphs (`dbt docs generate`). Use these to identify upstream/downstream dependencies.
+
+### SSIS (SQL Server Integration Services)
+
+SSIS packages are `.dtsx` XML files with data flow tasks.
+
+**Finding the package**: Look in the SSIS project for `.dtsx` files. Data flows contain source, transform, and destination components.
+
+**Tracing data flows**: Each data flow task has source adapters (OLE DB Source, Flat File Source), transformations (Derived Column, Lookup, Conditional Split), and destination adapters.
+
+### Stored Procedure-Based ETL
+
+For SP-based migrations:
+
+1. **Find the SP** in your database project or schema export directory
 2. **Read the SELECT statement**: Source columns are in the FROM/JOIN clauses, output columns are the SELECT aliases
-3. **Follow the same three-hop logic**: The SP embodies Hop 2 (the transform), so trace backward to find the source (Hop 1) and forward to find the sink (Hop 3)
+3. **Follow the same hop logic**: The SP embodies the transform step, so trace backward to find the source and forward to find the sink
+
+### Code-Based ETL (Python/Spark/Custom Scripts)
+
+For programmatic pipelines:
+
+1. **Find the script/module** responsible for the entity migration
+2. **Trace the read**: What DataFrame, query, or file read brings in source data?
+3. **Trace the transforms**: Column renames, type casts, joins, filters, aggregations
+4. **Trace the write**: What table/file/API receives the output?
 
 ## Common Transform Patterns
 
-### CASE Statements (Option Set Mapping)
+These patterns appear across all ETL tools:
+
+### CASE Statements (Code/Enum Mapping)
 ```sql
 CASE src.StatusCode
-    WHEN 'A' THEN 455780000  -- Active
-    WHEN 'I' THEN 455780001  -- Inactive
+    WHEN 'A' THEN 1  -- Active
+    WHEN 'I' THEN 2  -- Inactive
     ELSE NULL
-END AS alm_status
+END AS target_status
 ```
-Document: Legacy code, DV option set value, and label.
+Document: Legacy code, target value, and label.
 
 ### LEFT JOIN (Lookup Resolution)
 ```sql
-LEFT JOIN stg_BusinessUnit bu ON src.BUID = bu.LegacyBUID
--- Output: bu.alm_businessunitid AS alm_parentbusinessunitid
+LEFT JOIN ref_department dept ON src.DeptFK = dept.LegacyDeptID
+-- Output: dept.target_department_id AS parent_department_id
 ```
-Document: Which lookup table, join columns, and which DV GUID field it resolves to.
+Document: Which lookup table, join columns, and which target field it resolves to.
 
 ### String Cleanup
 ```sql
@@ -103,7 +125,7 @@ LTRIM(RTRIM(REPLACE(src.Name, CHAR(9), '')))
 ```
 Document: What cleanup is applied and why.
 
-### CTE Chains
+### CTE Chains (Hierarchy Resolution)
 ```sql
 WITH Hierarchy AS (
     SELECT ID, ParentID, Name, 0 AS Level FROM Org WHERE ParentID IS NULL
@@ -118,7 +140,7 @@ Document: The hierarchy resolution logic and depth handling.
 
 For each entity, the tracer produces:
 1. **Column mapping table** (see mapping-guide.md for structure)
-2. **Transform details** for complex SQL logic
+2. **Transform details** for complex SQL/code logic
 3. **Lookup dependencies** with load-order implications
 4. **Unmapped columns** with explanations
 5. **Data quality notes** (truncation, nulls, encoding)
