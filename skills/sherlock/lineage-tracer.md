@@ -58,10 +58,26 @@ ADF pipelines are JSON definitions with Copy activities, stored procedure activi
 
 **Tracing Copy activities**: Each Copy activity has a `source` and `sink` section. Key fields:
 - `sqlReaderQuery` or table reference — the source columns being read
-- `preCopyScript` (often `TRUNCATE TABLE stg_*`) — confirms the staging table name
+- `preCopyScript` (often `TRUNCATE TABLE <staging_table>`) — confirms the staging table name
 - Sink configuration — the target entity/table, write behavior (upsert/append), key strategy
 
 **Tracing transforms**: The `sqlReaderQuery` in the second Copy activity typically contains the core transformation SQL — JOINs, CASE statements, string functions, CTEs.
+
+**What to extract from the transform SQL:**
+- **Column aliases**: `stg.OrgName AS org_name` maps staging column to output
+- **JOINs**: Lookup resolution joins resolve legacy FKs to target keys
+- **CASE statements**: Enum/code mapping (legacy codes to target values)
+- **String functions**: LTRIM, RTRIM, REPLACE, SUBSTRING for cleanup
+- **COALESCE**: Fallback chains for nullable fields
+- **Computed columns**: CONCAT, arithmetic, conditional logic
+- **CTE chains**: Multi-step transforms for hierarchies or complex logic
+- **WHERE clauses**: Row filtering
+
+**What to extract from the sink configuration:**
+- Target entity/table name
+- Write behavior (upsert, append, merge)
+- Key matching strategy (alternate key, primary key, natural key)
+- Batch size and performance settings
 
 ### dbt (Data Build Tool)
 
@@ -77,9 +93,16 @@ dbt models are SQL SELECT statements that define transformations.
 
 SSIS packages are `.dtsx` XML files with data flow tasks.
 
-**Finding the package**: Look in the SSIS project for `.dtsx` files. Data flows contain source, transform, and destination components.
+**Finding the package**: Look in the SSIS project for `.dtsx` files. Each package contains Control Flow (task orchestration) and Data Flow (column-level transformations) tasks.
 
-**Tracing data flows**: Each data flow task has source adapters (OLE DB Source, Flat File Source), transformations (Derived Column, Lookup, Conditional Split), and destination adapters.
+**Tracing data flows**: Open the data flow task XML or use the SSDT visual designer. Key components:
+- **Source adapters** (OLE DB Source, Flat File Source): Define the source query or table and output columns
+- **Lookup transforms**: Resolve foreign keys by joining to reference tables. Check cache mode (Full, Partial, None) and match/no-match output routing
+- **Derived Column transforms**: Expressions that create or modify columns — equivalent to SQL CASE/string functions
+- **Conditional Split**: Routes rows to different outputs based on conditions (equivalent to WHERE/CASE)
+- **Destination adapters**: Define the target table and column mappings
+
+**Column mappings**: In the XML, column mappings are defined via `<inputColumn>` and `<externalMetadataColumn>` elements within each component. The visual designer shows these as drag-and-drop lines between source and destination columns.
 
 ### Stored Procedure-Based ETL
 
@@ -101,6 +124,8 @@ For programmatic pipelines:
 ## Common Transform Patterns
 
 These patterns appear across all ETL tools:
+
+The examples below use SQL syntax. For Python/Spark ETL, the equivalents are: `when()`/`otherwise()` for CASE, `df.join()` for LEFT JOIN, `trim()`/`regexp_replace()` for string cleanup, and recursive DataFrame operations or graph libraries for hierarchies.
 
 ### CASE Statements (Code/Enum Mapping)
 ```sql
