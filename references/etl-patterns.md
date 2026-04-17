@@ -6,41 +6,41 @@ A concise reference for recognizing and documenting common patterns encountered 
 
 The most common pattern. Data flows through three hops:
 
-1. **Copy**: Raw data from source system is copied to a staging table in Azure SQL. Minimal transformation — just a faithful copy.
-2. **Transform**: A SQL query (embedded in a Copy activity or stored procedure) reads from staging, applies JOINs/CASE/string functions, and produces the output columns.
-3. **Load**: The transformed output is upserted into the target system (Dataverse) via Copy activity with alternate key matching.
+1. **Copy**: Raw data from source system is copied to a staging table in the staging database. Minimal transformation — just a faithful copy.
+2. **Transform**: A SQL query (embedded in a pipeline activity or stored procedure) reads from staging, applies JOINs/CASE/string functions, and produces the output columns.
+3. **Load**: The transformed output is upserted into the target system via pipeline activity with alternate key matching.
 
-**Recognition**: Pipeline has two Copy activities in sequence. First has an on-prem source and Azure SQL sink with a `TRUNCATE` preCopyScript. Second has Azure SQL source (with a complex `sqlReaderQuery`) and Dataverse sink.
+**Recognition**: Pipeline has two activities in sequence. First has a source system connection and staging database sink with a `TRUNCATE` preCopyScript. Second has a staging database source (with a complex transform query) and target system sink.
 
-## Lookup Resolution (FK to GUID)
+## Lookup Resolution (FK to Target Key)
 
-Legacy systems use integer foreign keys. Target system (Dataverse) uses GUIDs. Resolution happens via JOIN to a reference/staging table that maps legacy IDs to target GUIDs.
+Legacy systems use integer foreign keys. Target systems may use different key types (GUIDs, surrogate keys, natural keys). Resolution happens via JOIN to a reference/staging table that maps legacy IDs to target keys.
 
 ```sql
 LEFT JOIN stg_Organization org ON src.OrgFK = org.LegacyOrgID
--- Output: org.alm_organizationid AS _alm_organizationid_value
+-- Output: org.target_org_id AS target_department_id
 ```
 
-**Recognition**: LEFT JOIN in the transform query to a `stg_*` table, outputting a GUID column. The staging lookup table must be loaded before the entity that references it.
+**Recognition**: LEFT JOIN in the transform query to a `stg_*` table, outputting a target key column. The staging lookup table must be loaded before the entity that references it.
 
 **Documentation**: Note the lookup table, join columns, and load-order dependency.
 
-## Option Set Mapping (Legacy Codes to DV Picklist)
+## Code/Enum Mapping (Legacy Codes to Target Values)
 
-Legacy systems store status/type as integers or short strings. Dataverse uses option set values (typically 455780000+).
+Legacy systems store status/type as integers or short strings. Target systems use their own code sets (enums, integer codes, string codes).
 
 ```sql
 CASE src.StatusCode
-    WHEN 'A' THEN 455780000
-    WHEN 'I' THEN 455780001
-    WHEN 'P' THEN 455780002
+    WHEN 'A' THEN 1
+    WHEN 'I' THEN 2
+    WHEN 'P' THEN 3
     ELSE NULL
-END AS alm_status
+END AS target_status
 ```
 
-**Recognition**: CASE statement in the transform query mapping discrete values to 455780000-range integers.
+**Recognition**: CASE statement mapping discrete source values to target-system-specific codes.
 
-**Documentation**: Create a mapping table showing legacy value, DV option set value, and human-readable label.
+**Documentation**: Create a mapping table showing legacy value, target value, and human-readable label.
 
 ## Hierarchy Loading (Self-Referential Tables)
 
@@ -77,30 +77,30 @@ WHERE EntityID BETWEEN @StartID AND @EndID
 
 ## N:N Junction Tables
 
-Many-to-many relationships in the legacy system are represented as junction tables. In Dataverse, these become N:N relationship associations.
+Many-to-many relationships in the legacy system are represented as junction tables. In the target system, these become N:N relationship associations or junction/bridge tables.
 
 **Flow**:
 1. Load both related entities first
 2. Query the legacy junction table for pairs of IDs
-3. Resolve both IDs to DV GUIDs
-4. Use the Dataverse `$ref` API (or `$batch` for bulk) to create associations
+3. Resolve both IDs to target keys
+4. Insert associations via target system API or junction table
 
-**Recognition**: Three-column junction table (JunctionID, Entity1FK, Entity2FK), or a Dataverse N:N relationship being populated.
+**Recognition**: Three-column junction table (JunctionID, Entity1FK, Entity2FK), or a target system N:N relationship being populated.
 
 **Documentation**: Note the relationship name, both related entities, the source of pairs, and batch/parallelism settings.
 
 ## Polymorphic Lookups
 
-A single foreign key column in the legacy system can point to different entity types depending on context. In Dataverse, these are polymorphic lookup fields (Customer, Owner, Regarding).
+A single foreign key column in the legacy system can point to different entity types depending on context. This is common in CRM systems (Dataverse, Salesforce) as polymorphic lookup fields (Customer, Owner, Regarding).
 
 ```sql
 CASE src.RelatedEntityType
-    WHEN 'Account' THEN '/accounts(' + CAST(acct.alm_accountid AS VARCHAR(36)) + ')'
-    WHEN 'Contact' THEN '/contacts(' + CAST(cont.alm_contactid AS VARCHAR(36)) + ')'
-END AS "alm_regardingid@odata.bind"
+    WHEN 'Account' THEN '/accounts(' + CAST(acct.target_accountid AS VARCHAR(36)) + ')'
+    WHEN 'Contact' THEN '/contacts(' + CAST(cont.target_contactid AS VARCHAR(36)) + ')'
+END AS regarding_id_ref
 ```
 
-**Recognition**: CASE statement that constructs different `@odata.bind` URIs based on a type discriminator column.
+**Recognition**: CASE statement that constructs different entity references based on a type discriminator column. The exact syntax depends on the target API (e.g., OData entity references, API resource paths, foreign key with type discriminator column).
 
 **Documentation**: Note all possible target entity types, the discriminator column/logic, and the lookup resolution for each type.
 
@@ -114,6 +114,6 @@ Migrating record ownership involves multiple related entities loaded in strict o
 4. **Security Roles**: Assigned to users/teams
 5. **Record Ownership**: Records assigned to users or teams
 
-**Recognition**: Pipeline orchestrator runs child pipelines in a specific sequence. Security model configuration tables control which environments are processed.
+**Recognition**: Pipeline orchestrator runs child pipelines in a specific sequence. Configuration tables or parameters control which target environments are processed.
 
-**Documentation**: Note the full chain, the configuration tables involved (e.g., `ADF_Security_Model_Config`), and the environment-specific parameters (root BU GUID, service URI).
+**Documentation**: Note the full chain, the configuration tables involved, and the environment-specific parameters (root hierarchy ID, service URI).

@@ -5,28 +5,27 @@
 | Field | Value |
 |---|---|
 | Source Table | `{dbo.SourceTable}` |
-| Target DV Entity | `{alm_targetentity}` |
-| Pipeline | `{pipeline_name}` |
-| Alternate Key | `{alm_alternatekey}` |
-| Upsert Behavior | Match on alternate key, create or update |
+| Target Table/Entity | `{target_table}` |
+| Pipeline/Job | `{pipeline_name}` |
+| Key Strategy | `{match on alternate key, create or update}` |
 | Record Count (approx) | {count} |
 
 ## Column Mapping
 
-| Source Table | Source Column | Source Type | DV Entity | DV Attribute | DV Type | Transform | Lookup Dependencies | Notes |
+| Source Table | Source Column | Source Type | Target Table | Target Column | Target Type | Transform | Lookup Dependencies | Notes |
 |---|---|---|---|---|---|---|---|---|
-| {dbo.Source} | {SourceCol1} | {varchar(100)} | {alm_entity} | {alm_attribute1} | {Single Line of Text} | {LTRIM(RTRIM(SourceCol1))} | {None} | {Whitespace cleanup} |
-| {dbo.Source} | {SourceCol2} | {int} | {alm_entity} | {alm_attribute2} | {Choice} | {CASE SourceCol2 WHEN 1 THEN 455780000 END} | {None} | {Option set mapping} |
-| {dbo.Source} | {SourceFK} | {int} | {alm_entity} | {alm_lookupfield} | {Lookup} | {JOIN stg_Ref ON FK = RefID, resolve to DV GUID} | {stg_Ref must be loaded first} | {FK resolution} |
+| {dbo.Source} | {SourceCol1} | {varchar(100)} | {target_table} | {target_col1} | {varchar(100)} | {LTRIM(RTRIM(SourceCol1))} | {None} | {Whitespace cleanup} |
+| {dbo.Source} | {SourceCol2} | {int} | {target_table} | {target_col2} | {int} | {CASE SourceCol2 WHEN 1 THEN 100 END} | {None} | {Code mapping} |
+| {dbo.Source} | {SourceFK} | {int} | {target_table} | {target_lookup} | {foreign key} | {JOIN ref_table ON FK = RefID} | {ref_table must be loaded first} | {FK resolution} |
 
 ## Transform Details
 
-### {SourceCol2} Option Set Mapping
+### {SourceCol2} Code Mapping
 
-| Legacy Value | DV Option Set Value | Label |
+| Legacy Value | Target Value | Label |
 |---|---|---|
-| 1 | 455780000 | {Label A} |
-| 2 | 455780001 | {Label B} |
+| 1 | 100 | {Label A} |
+| 2 | 200 | {Label B} |
 
 ### {Complex Transform Name}
 
@@ -36,13 +35,13 @@
 
 | Lookup Table | Source | Used By (Column) | Join Logic | Purpose |
 |---|---|---|---|---|
-| {stg_Ref} | {Legacy dbo.Ref} | {alm_lookupfield} | {JOIN on FK = RefID} | {Resolve FK to DV GUID} |
+| {ref_table} | {Legacy dbo.Ref} | {target_lookup} | {JOIN on FK = RefID} | {Resolve FK to target key} |
 
 ## Unmapped Columns
 
 | Source Column | Reason |
 |---|---|
-| {LastModifiedDate} | {System-managed in Dataverse} |
+| {LastModifiedDate} | {System-managed in target} |
 | {InternalFlag} | {Not in scope per business decision} |
 
 ## Data Quality Notes
