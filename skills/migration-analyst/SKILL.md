@@ -39,7 +39,7 @@ Determine which entities are in scope:
 
 ### 2. Trace Data Lineage
 
-For each entity in scope, trace the full path from source to sink. Follow the guidance in `lineage-tracer.md`:
+For each entity in scope, trace the full path from source to sink. Follow the guidance in the lineage-tracer skill (`/sherlock:lineage-tracer`):
 - Identify the pipeline, job, or process responsible for the migration
 - Walk through each hop (source → [staging] → [transform] → sink)
 - Extract column-level mappings with transform details
@@ -47,7 +47,7 @@ For each entity in scope, trace the full path from source to sink. Follow the gu
 
 ### 3. Produce or Validate Mapping Artifacts
 
-Generate mapping documents following the structure defined in `mapping-guide.md`:
+Generate mapping documents following the structure defined in the mapping-guide skill (`/sherlock:mapping-guide`):
 - Entity summary (source table, target table/entity, pipeline, key strategy)
 - Column mapping table (every row = one column's journey)
 - Transform details for complex logic
@@ -65,10 +65,10 @@ Produce markdown mapping documents with the correct structure. Use the templates
 
 ### Integrated Mode
 
-When working within a larger migration project that has its own orchestration or spec system, adapt the output format to match the project's conventions while preserving the mapping structure defined in `mapping-guide.md`.
+When working within a larger migration project that has its own orchestration or spec system, adapt the output format to match the project's conventions while preserving the mapping structure defined in the mapping-guide skill.
 
 ## References
 
-- `mapping-guide.md` — What a mapping document should contain and how to structure it
-- `lineage-tracer.md` — How to trace data flow through pipelines and transforms
-- `references/etl-patterns.md` — Common ETL patterns for recognition during analysis
+- `/sherlock:mapping-guide` — What a mapping document should contain and how to structure it
+- `/sherlock:lineage-tracer` — How to trace data flow through pipelines and transforms
+- `../../references/etl-patterns.md` — Common ETL patterns for recognition during analysis

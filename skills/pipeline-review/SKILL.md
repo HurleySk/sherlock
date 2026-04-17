@@ -135,8 +135,8 @@ SPECIFIC_QUESTIONS:
 {Any targeted concerns from the orchestrator}
 
 REFERENCE_MATERIAL:
-- Use lineage-tracer methodology for tracing data flow through steps
-- See references/etl-patterns.md for common ETL pattern recognition
+- Use /sherlock:lineage-tracer methodology for tracing data flow through steps
+- See ../../references/etl-patterns.md for common ETL pattern recognition
 
 Write your assessment to OUTPUT_FILE with this structure:
 - FINDINGS: Issues found (rated HIGH/MED/LOW with file:line citations)
@@ -179,9 +179,10 @@ The orchestrator does NOT re-do subagent analysis. Apply targeted spot-checks:
 
 For any pipeline change that introduces or modifies a JOIN:
 - **Do NOT rely on staging/intermediate table data to validate JOIN correctness.** Staging tables are intermediaries with incomplete data.
-- Flag any JOIN that links cross-system IDs (e.g., legacy FK to target lookup field) as requiring **first-principles validation**: query the actual source system and the actual target system independently, then cross-check.
-- **Do NOT assume overlapping IDs mean a relationship.** Different tables can have overlapping ID ranges. Verify by checking identifying fields (names, codes).
-- If the review can't validate the JOIN from code alone, add a NEED_INFO item specifying what queries are needed.
+- Flag any JOIN that links cross-system IDs (e.g., legacy FK to target lookup field) as requiring **first-principles validation**: query the actual source system and the actual target system independently, then cross-check using identifying fields (names, emails, codes) — not just key overlap.
+- **Do NOT assume overlapping IDs mean a relationship.** Different source tables can have overlapping numeric ID ranges that refer to completely different records. A high match count does not prove correctness. Always verify by comparing an independent identifying field between the joined records.
+- **Commingled ID formats**: A single target field can contain values from multiple source pipelines with different ID formats (e.g., prefixed IDs from one pipeline, raw numeric from another). Any normalization that strips prefixes or reformats values to create more matches can produce thousands of false positives if the formats represent different ID systems. Investigate each format's provenance separately before normalizing.
+- If the review can't validate the JOIN from code alone, add a NEED_INFO item specifying: (1) the source system query needed with identifying fields, (2) the target system query needed with identifying fields, (3) the cross-check criteria (e.g., "matching key values should produce matching person names").
 
 ### 2. Claim verification
 
@@ -190,21 +191,33 @@ For each FINDING or RISK rated HIGH:
 - Verify the code actually says what the subagent claims
 - If the subagent misread the code or cited wrong line numbers, note the discrepancy
 
-### 3. Cross-group consistency
+### 3. Null semantics and error handling
+
+For each load/upsert step, verify two critical settings:
+
+**Null handling behavior**: Most target systems have a setting controlling whether NULL source values overwrite existing target values or are skipped. (In ADF: `ignoreNullValues`; in dbt: `merge` strategy with column lists; in SSIS: NULL handling in destination adapters.) A LEFT JOIN that doesn't match produces NULL — if the target system writes NULLs, this **clears existing data**. Before deploying:
+1. Check how many target records currently have the field populated
+2. Check how many source records will match the JOIN
+3. If matches < currently populated, the unmatched records will lose data
+
+**Silent error swallowing**: Many ETL tools have settings to skip incompatible/failed rows silently (ADF: `enableSkipIncompatibleRow`; SSIS: error output routing to /dev/null; dbt: `on_schema_change: 'ignore'`). Flag any step with silent error handling enabled. Ask: "What failure modes are expected here?" If none, the setting may be masking real data issues. The pipeline reports success while records are silently dropped.
+
+### 4. Cross-group consistency
 
 Look for contradictions or gaps between group assessments:
 - If one group says "data looks correct" but another group's transform assumes different column names — naming mismatch
 - If a transform group says it reads from a table that another group shows is populated AFTER the transform runs — execution order conflict
 - If extraction says "staging table has column X" but load group references column Y — schema drift
+- If a lookup JOIN depends on a staging column, verify the extraction step actually populates that column (see "Schema Does Not Equal Data Flow" in `../../references/etl-patterns.md`)
 
-### 4. Verify against live state
+### 5. Verify against live state
 
 Compare changed files against deployed/live state where accessible:
 - Pipeline definitions: repo version vs deployed version
 - Transform SQL: repo version vs database version
 - Schemas: expected columns vs actual columns
 
-### 5. Deployment safety
+### 6. Deployment safety
 
 - If pipeline references environment-specific configuration, verify coverage across all target environments
 - Check that parameterization handles environment differences (connection strings, credentials, paths)
@@ -275,9 +288,9 @@ After completing the review, if any novel pattern or pitfall was discovered:
 
 ## References
 
-- `lineage-tracer.md` — Subagents can use lineage tracing methodology for deep step analysis
-- `mapping-guide.md` — Reference for mapping document structure if review identifies mapping concerns
-- `references/etl-patterns.md` — Common ETL patterns for recognition during partition and verify phases
+- `/sherlock:lineage-tracer` — Subagents can use lineage tracing methodology for deep step analysis
+- `/sherlock:mapping-guide` — Reference for mapping document structure if review identifies mapping concerns
+- `../../references/etl-patterns.md` — Common ETL patterns for recognition during partition and verify phases
 
 ## Notes
 

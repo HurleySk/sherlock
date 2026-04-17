@@ -104,6 +104,63 @@ END AS regarding_id_ref
 
 **Documentation**: Note all possible target entity types, the discriminator column/logic, and the lookup resolution for each type.
 
+## Dedup Before Joining (Lookup Fan-Out Prevention)
+
+When a transform JOIN resolves a foreign key via a lookup/staging table, duplicate keys in the lookup table cause row fan-out — one source row becomes many output rows. This silently inflates record counts and can create duplicate upserts in the target.
+
+```sql
+-- Dedup the lookup table before joining
+WITH EmployeeDedup AS (
+    SELECT employee_id, legacy_employee_id,
+        ROW_NUMBER() OVER(
+            PARTITION BY legacy_employee_id
+            ORDER BY employee_id
+        ) AS rn
+    FROM stg_employee
+    WHERE legacy_employee_id IS NOT NULL
+)
+LEFT JOIN EmployeeDedup emp
+ON src.EmployeeFK = emp.legacy_employee_id AND emp.rn = 1
+```
+
+**Recognition**: LEFT JOIN to a staging/lookup table where the join key is not guaranteed unique. Also: unexplained row count increases after a transform step.
+
+**Detection**: Before writing any lookup JOIN, check for duplicates:
+```sql
+SELECT join_key_column, COUNT(*) AS cnt
+FROM lookup_table
+WHERE join_key_column IS NOT NULL
+GROUP BY join_key_column
+HAVING COUNT(*) > 1
+```
+
+**Documentation**: Note which lookup tables were deduped, the partition/order strategy chosen, and whether the duplicates represent real data issues or expected multi-valued lookups.
+
+## Shared Staging Table Isolation
+
+When multiple pipelines or pipeline runs share the same staging table (TRUNCATE + reload), concurrent execution causes data corruption — one run truncates mid-read by another.
+
+**Recognition**: Multiple pipelines reference the same staging table in their `preCopyScript` (TRUNCATE) or sink configuration. Orchestrator pipelines use ForEach or parallel execution patterns.
+
+**Mitigations**:
+- **Sequential execution**: Ensure pipelines sharing staging tables run serially (`isSequential: true` in ForEach, or explicit dependency chains)
+- **Dedicated staging tables**: Give each pipeline its own staging table (e.g., `stg_employee_nightly` vs `stg_employee_security`)
+- **Parameterized table names**: Use pipeline parameters to route each run to a different staging table
+
+**Documentation**: Note which staging tables are shared, which pipelines share them, and what isolation mechanism prevents concurrent corruption.
+
+## Schema Does Not Equal Data Flow
+
+A staging table's DDL (CREATE TABLE) defines what columns *can* hold data — not what columns *actually receive* data. The pipeline's extraction step (query, FetchXML attribute list, column mapping) determines what flows in. Columns not requested by the extraction step exist in the schema but contain NULLs in every row.
+
+**Recognition**: A staging table has columns that a transform JOIN or downstream step depends on, but the extraction step's SELECT/attribute list doesn't include them.
+
+**Why it matters**: Assuming a column has data because it exists in the DDL leads to JOINs against all-NULL columns. The pipeline silently inserts NULLs for unrequested columns without error.
+
+**How to verify**: For any staging column used in a transform or JOIN, trace backward to the extraction step and confirm the column appears in its SELECT list, FetchXML `<attribute>` list, or column mapping. If it doesn't, the column must be added to the extraction step before the downstream logic will work.
+
+**Documentation**: When mapping columns through staging, note both the DDL column and the extraction step that populates it. Flag any staging columns that exist in DDL but are not populated.
+
 ## Ownership and Team Assignment Chains
 
 Migrating record ownership involves multiple related entities loaded in strict order:

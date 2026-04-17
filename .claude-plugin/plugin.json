@@ -1,6 +1,6 @@
 {
   "name": "sherlock",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "ETL/data migration analysis skills for Claude Code — mapping document generation, data lineage tracing with column-level precision, and multi-agent pipeline review orchestration. Works with any ETL stack (ADF, dbt, SSIS, Informatica, Spark, custom scripts).",
   "author": {
     "name": "Samuel Hurley",

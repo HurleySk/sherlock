@@ -48,6 +48,29 @@ For each column, record:
 - Target table and column name
 - Any lookup dependencies (reference tables that must be loaded first)
 
+## Verification Pitfalls
+
+These are common mistakes when tracing lineage. Check for them before declaring a trace complete.
+
+### Schema columns are not data flow
+
+A staging table's DDL defines what columns *can* hold data. The extraction step's query or attribute list defines what columns *actually receive* data. A column can exist in the CREATE TABLE and be NULL in every row because the pipeline never requests it. When tracing a column through staging, always confirm the extraction step includes it — don't stop at the DDL.
+
+### Column format mismatches across systems
+
+Different source tables can store the same conceptual ID in completely different formats (padded, prefixed, different data types). A single target field can even contain values from multiple source pipelines with incompatible formats. Before documenting a column mapping that involves a JOIN on an ID field:
+1. Sample actual values from the source system
+2. Sample actual values from the target (if it already has data)
+3. Confirm the formats are compatible or document the transform needed
+
+### Dedup lookup tables before joining
+
+If a lookup/reference table has duplicate keys, a LEFT JOIN fans out — one source row becomes many output rows, silently inflating record counts. Wrap lookup tables in a `ROW_NUMBER() OVER(PARTITION BY join_key ...)` CTE or equivalent dedup logic. Check for duplicates early in the trace.
+
+### Cross-validate JOINs with identifying fields
+
+A high match count between two ID columns does not prove the JOIN is correct. Different tables can have overlapping numeric ranges that refer to completely different records. After documenting a JOIN, note whether it has been validated by comparing an independent field (names, emails, codes) between the joined records. If not validated, flag it.
+
 ## Tool-Specific Guidance
 
 ### Azure Data Factory (ADF)
@@ -164,7 +187,7 @@ Document: The hierarchy resolution logic and depth handling.
 ## Output
 
 For each entity, the tracer produces:
-1. **Column mapping table** (see mapping-guide.md for structure)
+1. **Column mapping table** (see `/sherlock:mapping-guide` for structure)
 2. **Transform details** for complex SQL/code logic
 3. **Lookup dependencies** with load-order implications
 4. **Unmapped columns** with explanations

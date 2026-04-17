@@ -39,8 +39,12 @@ claude skill install HurleySk/sherlock
 
 ```
 sherlock/
-  .claude-plugin/        # Plugin manifest for marketplace
-  skills/sherlock/       # Skill definitions (4 skills)
-  templates/             # Reusable document templates (column mapping, entity inventory)
-  references/            # Domain reference material (ETL patterns)
+  .claude-plugin/              # Plugin manifest for marketplace
+  skills/
+    migration-analyst/SKILL.md # Entry point for migration analysis
+    lineage-tracer/SKILL.md    # Column-level data lineage tracing
+    mapping-guide/SKILL.md     # Mapping document structure reference
+    pipeline-review/SKILL.md   # Multi-agent pipeline review orchestrator
+  templates/                   # Reusable document templates (column mapping, entity inventory)
+  references/                  # Domain reference material (ETL patterns)
 ```
