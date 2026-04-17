@@ -1,7 +1,7 @@
 {
   "name": "sherlock",
-  "version": "1.0.1",
-  "description": "Domain analyst skills for Claude Code — ETL/data migration analysis, mapping document generation, data lineage tracing with column-level precision.",
+  "version": "2.0.0",
+  "description": "ETL/data migration analysis skills for Claude Code — mapping document generation, data lineage tracing with column-level precision, and multi-agent pipeline review orchestration. Works with any ETL stack (ADF, dbt, SSIS, Informatica, Spark, custom scripts).",
   "author": {
     "name": "Samuel Hurley",
     "url": "https://github.com/HurleySk"
@@ -15,8 +15,10 @@
     "mapping",
     "lineage",
     "analyst",
-    "dataverse",
-    "adf",
+    "pipeline-review",
+    "dbt",
+    "ssis",
+    "informatica",
     "sql"
   ]
 }
