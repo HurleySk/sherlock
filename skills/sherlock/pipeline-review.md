@@ -134,6 +134,10 @@ DOWNSTREAM_CONTEXT:
 SPECIFIC_QUESTIONS:
 {Any targeted concerns from the orchestrator}
 
+REFERENCE_MATERIAL:
+- Use lineage-tracer methodology for tracing data flow through steps
+- See references/etl-patterns.md for common ETL pattern recognition
+
 Write your assessment to OUTPUT_FILE with this structure:
 - FINDINGS: Issues found (rated HIGH/MED/LOW with file:line citations)
 - RISKS: Potential problems that need verification
@@ -241,7 +245,7 @@ Write `output/reviews/{review-id}/_consolidated-review.md`:
 {Aggregated list from all subagents + orchestrator checks}
 
 ## Deployment Safety
-{Results from Phase 5.5}
+{Results from deployment safety checks}
 
 ## Orchestrator Verification Notes
 - {Any discrepancies found in subagent claims}
@@ -261,13 +265,19 @@ Write `output/reviews/{review-id}/_consolidated-review.md`:
 
 After completing the review, if any novel pattern or pitfall was discovered:
 
-1. Read or create `knowledge.md` in the project's skill/config directory
+1. Read or create `knowledge.md` alongside the pipeline-review skill file, or in the project's `.claude/skills/` directory if the skill is used as a local project skill
 2. Draft a new checklist item with:
    - What to check
    - Why it matters (the failure mode)
    - How to check it (specific things to look for in code)
 3. Present the proposed addition to the user
 4. If approved, append it to `knowledge.md`
+
+## References
+
+- `lineage-tracer.md` — Subagents can use lineage tracing methodology for deep step analysis
+- `mapping-guide.md` — Reference for mapping document structure if review identifies mapping concerns
+- `references/etl-patterns.md` — Common ETL patterns for recognition during partition and verify phases
 
 ## Notes
 
